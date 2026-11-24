@@ -1904,7 +1904,8 @@ def test_get_settings_frame_matches_captured_header_and_slice0() -> None:
 
 
 def test_key_exchange_frame_wraps_our_own_key_not_the_captured_blob() -> None:
-    frame, session_key = build_wmsvr_key_exchange_frame()
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+    frame, session_key = build_wmsvr_key_exchange_frame(public_key=private_key.public_key())
 
     assert len(session_key) == 16
     assert frame.header.to_bytes().hex() == CAPTURED_GET_SETTINGS_HEADER_HEX

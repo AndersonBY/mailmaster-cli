@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import re
 
 import pytest
 from typer.testing import CliRunner
@@ -2385,6 +2386,7 @@ def test_unknown_account_is_a_structured_error_for_every_entry_point(
         def get_wmsvr_bootstrap(self, account: str | None = None):
             raise LocalLookupError("account_not_found", f"Account not found: {account}")
 
+    monkeypatch.setattr("mailmaster.cli.commands._paths_and_store", _fake_paths_and_store)
     monkeypatch.setattr("mailmaster._facade.MailMaster", _FakeMailMaster)
 
     result = runner.invoke(app, ["--format", "json", *argv])
@@ -2876,6 +2878,7 @@ def test_root_help_displays_organized_panels_and_agent_tip() -> None:
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
+    plain_stdout = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
     for expected in (
         "activate-skill",
         "--json",
@@ -2885,7 +2888,7 @@ def test_root_help_displays_organized_panels_and_agent_tip() -> None:
         "Mailbox Actions",
         "Protocol Diagnostics (Advanced)",
     ):
-        assert expected in result.stdout
+        assert expected in plain_stdout
 
 
 @pytest.mark.parametrize(
