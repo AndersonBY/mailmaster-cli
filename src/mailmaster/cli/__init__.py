@@ -270,6 +270,7 @@ class JsonAwareTyperGroup(typer.core.TyperGroup):
 
 app = typer.Typer(
     cls=JsonAwareTyperGroup,
+    context_settings={"help_option_names": ["-h", "--help"]},
     help=(
         "Read, search, send, draft, and manage NetEase MailMaster emails on Windows "
         "(IMAP/SMTP & 163/126/yeah.net Wmsvr).\n\n"
@@ -279,12 +280,34 @@ app = typer.Typer(
 )
 
 
+def _version_callback(value: bool) -> None:
+    if not value:
+        return
+    from .. import __version__
+
+    _emit(
+        "version",
+        {"version": __version__},
+        lambda: typer.echo(f"mailmaster {__version__}"),
+    )
+    raise typer.Exit()
+
+
 @app.callback()
 def app_callback(
     ctx: typer.Context,
     format: str = typer.Option("text", "--format", help="Output format: text or json (works before or after any command)."),
     json_output: bool = typer.Option(False, "--json", help="Output structured JSON (shortcut for --format json; works anywhere)."),
+    version: bool = typer.Option(
+        False,
+        "-V",
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the mailmaster version and exit.",
+    ),
 ) -> None:
+    del version
     fmt = format.lower().strip()
     if fmt not in {"text", "json"}:
         raise typer.BadParameter("--format must be one of: text, json")
@@ -357,6 +380,7 @@ def main() -> None:
 
 from . import commands as _commands  # noqa: E402,F401
 from . import skill_commands as _skill_commands  # noqa: E402,F401
+from . import update_commands as _update_commands  # noqa: E402,F401
 from . import wmsvr_commands as _wmsvr_commands  # noqa: E402,F401
 
 __all__ = ["app", "main"]

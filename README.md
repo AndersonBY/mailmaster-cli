@@ -14,6 +14,10 @@ uv tool install mailmaster
 
 # 可选：支持将 LaTeX 数学公式渲染为内联图片
 uv tool install "mailmaster[latex-image]"
+
+# 检查或一键更新到 GitHub Releases 最新版本
+mailmaster update --check
+mailmaster update
 ```
 
 作为 Python 库安装到项目中：

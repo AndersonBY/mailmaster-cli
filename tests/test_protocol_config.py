@@ -1,14 +1,20 @@
 import base64
+import hashlib
 import json
+from pathlib import Path
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from mailmaster.protocol_config import (
+    DEFAULT_FIXED_PASSWORD,
+    DEFAULT_IV,
+    DEFAULT_SALT,
     build_runtime_password_from_sid,
     decrypt_account_config_blob,
     decrypt_config_password,
     decrypt_fixed_protected_blob,
     decrypt_runtime_protected_blob,
+    get_security_constants,
 )
 
 
@@ -87,3 +93,25 @@ def test_decrypt_fixed_and_runtime_protected_blobs(monkeypatch) -> None:
 
     assert decrypt_fixed_protected_blob(fixed_cipher) == fixed_plain
     assert decrypt_runtime_protected_blob(runtime_cipher) == runtime_plain
+
+
+def test_fallback_security_constants_match_expected_digests(tmp_path: Path) -> None:
+    assert isinstance(DEFAULT_FIXED_PASSWORD, str)
+    assert isinstance(DEFAULT_SALT, str)
+    assert isinstance(DEFAULT_IV, bytes)
+    assert len(DEFAULT_FIXED_PASSWORD) == 28
+    assert len(DEFAULT_SALT) == 15
+    assert len(DEFAULT_IV) == 16
+    assert (
+        hashlib.sha256(DEFAULT_FIXED_PASSWORD.encode("ascii")).hexdigest()
+        == "281bee06a0796be3fe8cd57414b2494794347f92165961f0425e8b89093c0424"
+    )
+    assert (
+        hashlib.sha256(DEFAULT_SALT.encode("ascii")).hexdigest()
+        == "41e64efff3154d111ead4f8b0025dfed2689211e139bc5973426b114fde7967e"
+    )
+    assert (
+        hashlib.sha256(DEFAULT_IV).hexdigest()
+        == "0c24f5ba0efbaad5228ba8af1209ad4a07b79db03ca2d640c2f8a937c33e6864"
+    )
+    assert get_security_constants(tmp_path) == (DEFAULT_IV, DEFAULT_SALT, DEFAULT_FIXED_PASSWORD)

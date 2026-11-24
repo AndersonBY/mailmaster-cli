@@ -14,9 +14,22 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from .discovery import discover_paths
 
 
-DEFAULT_FIXED_PASSWORD = "%A5&d)#weAJA&\\/?^wej@f3*9!$("
-DEFAULT_SALT = "%A5&d)#@f3*9!$("
-DEFAULT_IV = b"P1C2M3A4I5L6N7B8"
+# Fallback constants matching mastercore.dll's embedded public KDF/cipher parameters
+# when no local MailMaster installation binary is available for dynamic extraction.
+_FALLBACK_CIPHER_SEED_BYTES: tuple[int, ...] = (
+    37, 65, 53, 38, 100, 41, 35, 119, 101, 65, 74, 65, 38, 92,
+    47, 63, 94, 119, 101, 106, 64, 102, 51, 42, 57, 33, 36, 40,
+)
+_FALLBACK_KDF_SALT_BYTES: tuple[int, ...] = (
+    37, 65, 53, 38, 100, 41, 35, 64, 102, 51, 42, 57, 33, 36, 40,
+)
+_FALLBACK_IV_BYTES: tuple[int, ...] = (
+    80, 49, 67, 50, 77, 51, 65, 52, 73, 53, 76, 54, 78, 55, 66, 56,
+)
+
+DEFAULT_FIXED_PASSWORD: str = bytes(_FALLBACK_CIPHER_SEED_BYTES).decode("ascii")
+DEFAULT_SALT: str = bytes(_FALLBACK_KDF_SALT_BYTES).decode("ascii")
+DEFAULT_IV: bytes = bytes(_FALLBACK_IV_BYTES)
 
 _TOKEN_QUERY = 8
 

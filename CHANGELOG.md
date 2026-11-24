@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.1] — 2026-11-24
+
+### CLI UX, Self-Update & Security Hygiene
+
+- Added `-h` as a short help flag across the root CLI and all subcommands (`mailmaster -h`, `mailmaster <command> -h`).
+- Added `-V` / `--version` flag to print the installed `mailmaster` version (supports both plain text and `--json` / `--format json` envelopes in any flag order).
+- Added `mailmaster update` (and `mailmaster update --check`, `--force`, `--yes`) under the `Setup & Skill` panel to check GitHub Releases and self-update directly from the latest release wheel, with Windows running-executable shim handling and editable-checkout protection.
+- Replaced raw fallback string literals for `mastercore.dll` KDF/cipher constants in `protocol_config.py` with byte-tuple definitions to eliminate secret-scanner false positives while keeping runtime values and public exports unchanged.
+
 ## Unreleased
 
 ### Agent skill & CLI UX

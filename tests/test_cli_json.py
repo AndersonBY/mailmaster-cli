@@ -2914,3 +2914,69 @@ def test_command_help_uses_plain_language_without_re_round_jargon(command_name: 
     assert "round " not in result.stdout.lower()
     if command_name != "wmsvr-login-probe":
         assert "Examples:" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["-h"],
+        ["send-mail", "-h"],
+        ["list", "-h"],
+        ["update", "-h"],
+        ["send-mail", "--json", "-h"],
+        ["-h", "--json"],
+    ],
+)
+def test_short_help_flag_works_for_root_and_subcommands(argv: list[str]) -> None:
+    result = runner.invoke(app, argv)
+
+    assert result.exit_code == 0
+    plain_stdout = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
+    assert "Usage:" in plain_stdout
+    if "send-mail" in argv:
+        assert "send-mail" in plain_stdout
+        assert "--to" in plain_stdout
+    elif "list" in argv:
+        assert "list" in plain_stdout
+        assert "--account" in plain_stdout
+    elif "update" in argv:
+        assert "update" in plain_stdout
+        assert "--check" in plain_stdout
+    else:
+        assert "Setup & Skill" in plain_stdout
+        assert "--version" in plain_stdout
+
+
+@pytest.mark.parametrize("argv", [["--version"], ["-V"]])
+def test_version_flag_text_output(argv: list[str]) -> None:
+    from mailmaster import __version__
+
+    result = runner.invoke(app, argv)
+
+    assert result.exit_code == 0
+    assert result.stdout.strip() == f"mailmaster {__version__}"
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--version", "--json"],
+        ["--json", "--version"],
+        ["-V", "--json"],
+        ["--json", "-V"],
+        ["--version", "--format", "json"],
+        ["--format=json", "-V"],
+    ],
+)
+def test_version_flag_json_output(argv: list[str]) -> None:
+    from mailmaster import __version__
+
+    result = runner.invoke(app, argv)
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "ok": True,
+        "command": "version",
+        "data": {"version": __version__},
+    }

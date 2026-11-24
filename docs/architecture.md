@@ -16,7 +16,8 @@
 | Wmsvr protocol & mailbox | `wmsvr/` (`tlv`, `keys`, `d1_wire`, `bootstrap`, `payloads`, `login`, `diagnostics`, `lz4`, `session`, `operations`) + `wmsvr_mail.py` | Modular Wmsvr/d1 transport, TLV/LEB128 codec, embedded RSA key unwrapping, AES-CBC slices, `app.db` bootstrap, login handshake, pure-Python LZ4/reply decoding, `WmsvrMailSession`, and verified send/draft/attachment/mutation/raw-source operations. `wmsvr_mail.py` stays as a compatibility facade. |
 | Facade | `_facade.py` | High-level `MailMaster` and `AccountAccess` APIs: `int \| str` account lookup, capability detection, centralized `resolve_send_transport`, unified `send_mail`, local-to-remote ID resolution in `fetch_mail_source`, shared `_open_private_session`, and verified workflows. |
 | Agent skill | `skill/` (repo root) + `src/mailmaster/skill/` | Canonical Agent playbook (`SKILL.md`, bundled inside the wheel) plus programmatic `load_skill_markdown`, `get_skill_source_path`, and `install_skill` helpers targeting `project`, `claude`, `codex`, `gemini`, and `cursor`. |
-| CLI | `cli/` (`__init__`, `errors`, `skill_commands`, `read_commands`, `send_commands`, `mutation_commands`, `wmsvr_commands`, `render`, `commands`) | Thin modular Typer CLI with `ContextVar`-scoped output format, flexible `--json` / `--format json` handling before or after subcommands, grouped help panels, structured JSON errors with actionable `suggestions`, `activate-skill`, and advanced `wmsvr-*` inspection commands. |
+| Self-update | `updater.py` | Query GitHub Releases (`releases/latest`), compare versions, guard editable checkouts, handle Windows running-shim staging, and upgrade directly from the latest release `.whl`. |
+| CLI | `cli/` (`__init__`, `errors`, `skill_commands`, `update_commands`, `read_commands`, `send_commands`, `mutation_commands`, `wmsvr_commands`, `render`, `commands`) | Thin modular Typer CLI with `ContextVar`-scoped output format, `-h`/`--help` and `-V`/`--version`, flexible `--json` / `--format json` handling before or after subcommands, grouped help panels, structured JSON errors with actionable `suggestions`, `activate-skill`, `update`, and advanced `wmsvr-*` inspection commands. |
 
 `models.py` holds the dataclasses shared across layers; `__init__.py` is the public library surface.
 
@@ -24,7 +25,7 @@
 
 Top-level `mailmaster --help` organizes commands into five panels:
 
-- **Setup & Skill**: `doctor`, `accounts`, `capabilities`, `activate-skill`
+- **Setup & Skill**: `doctor`, `accounts`, `capabilities`, `activate-skill`, `update`
 - **Read & Search**: `mailboxes`, `list`, `read`, `search`, `fetch-mail`
 - **Send & Drafts**: `send-mail`, `save-draft`, `send-draft`, `smtp-send`
 - **Mailbox Actions**: `mark-read`, `mark-unread`, `move-mail`, `delete-mail`

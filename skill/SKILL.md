@@ -123,6 +123,7 @@ mailmaster --json delete-mail --account user@163.com --mail-id 12345
 | Command | Purpose | Key Options | Notes |
 | --- | --- | --- | --- |
 | `activate-skill` | Print or install this `SKILL.md` | `--install <target>`, `--dest <path>`, `--path` | Targets: `project`, `claude`, `codex`, `gemini`, `cursor` |
+| `update` | Check or self-update from GitHub Releases | `--check`, `--force`, `--yes` | Downloads the latest release `.whl`; skips editable checkouts unless `--force` |
 | `doctor` | Inspect local MailMaster install and DB paths | *(none)* | Offline local check |
 | `accounts` | List configured local accounts | *(none)* | Offline local read |
 | `capabilities` | Inspect per-account transports and features | `--account`, `--query`, `--readable`, `--sendable`, `--mutable`, `--bootstrap`, `--path` | Always run first |
@@ -156,6 +157,7 @@ mailmaster --json delete-mail --account user@163.com --mail-id 12345
 | `wmsvr_draft_not_found` | No draft matched `--subject` | Save a draft first or pass `--draft-id` explicitly |
 | `draft_unsupported` / `draft_send_unsupported` / `mail_read_unsupported` | Wmsvr-only feature called on non-Wmsvr account | Use local `read` or `send-mail` for non-Wmsvr accounts |
 | `invalid_skill_target` | Unknown `--install` target in `activate-skill` | Use one of `project`, `claude`, `codex`, `gemini`, `cursor` |
+| `update_check_failed` / `update_install_failed` | GitHub Releases query or wheel install failed | Check network/proxy access or upgrade manually via `uv tool install --upgrade mailmaster` |
 
 ## Installing This Skill
 

@@ -14,6 +14,10 @@ uv tool install mailmaster
 
 # Optional: render LaTeX math formulas as inline images
 uv tool install "mailmaster[latex-image]"
+
+# Check for or install the latest version from GitHub Releases
+mailmaster update --check
+mailmaster update
 ```
 
 Install as a Python library in a project:

@@ -1,6 +1,6 @@
 [project]
 name = "mailmaster"
-version = "0.1.0"
+version = "0.1.1"
 description = "Read, search, send, draft, and manage NetEase MailMaster emails on Windows — usable as a Python library, CLI tool, and AI Agent skill."
 readme = "README_EN.md"
 license = { file = "LICENSE" }
