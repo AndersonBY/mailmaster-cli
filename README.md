@@ -1,259 +1,257 @@
-﻿# mailmaster
+# mailmaster
 
-`mailmaster` 是一个面向已安装网易邮箱大师的 Windows 命令行工具，用于读取本地 MailMaster 数据，并通过动态解密得到的 SMTP 配置直接发送邮件。
+[English](README_EN.md)
 
-它既适合人类直接使用，也适合 AI Agent / 脚本自动调用。
+在 Windows 命令行或 Python 中直接读取、搜索、发送和管理**网易邮箱大师（MailMaster）**里的邮件。支持普通 IMAP/SMTP 账号和 163/126/yeah.net 等网易系账号，支持 Markdown、LaTeX 公式、附件、草稿与结构化 JSON 输出，无需打开邮箱大师客户端。
 
 ## 安装
 
-### 使用 `uv tool install`
+推荐使用 [`uv`](https://docs.astral.sh/uv/) 一键安装为全局命令行工具：
 
 ```powershell
+# 推荐：一键安装全局命令行工具
 uv tool install mailmaster
-```
 
-安装后直接使用：
-
-```powershell
-mailmaster doctor
-```
-
-### 不安装，直接通过 `uvx` 运行
-
-```powershell
-uvx mailmaster doctor
-```
-
-如果你需要可选的 LaTeX 图片渲染支持：
-
-```powershell
+# 可选：支持将 LaTeX 数学公式渲染为内联图片
 uv tool install "mailmaster[latex-image]"
-
-# 或者一次性运行
-uvx --with "mailmaster[latex-image]" mailmaster doctor
 ```
 
-## 核心功能
-
-- 读取账号列表、文件夹、邮件列表、邮件详情
-- 搜索本地邮件数据
-- 动态解密当前账号 SMTP 配置并直接发送邮件
-- 支持纯文本、HTML、Markdown、本地内联图片、普通附件、LaTeX 渲染模式
-- 支持结构化 JSON 输出，便于 Agent / 脚本组合使用
-
-## 输出格式
-
-所有命令都支持全局 `--format` 参数：
+作为 Python 库安装到项目中：
 
 ```powershell
-# 默认文本输出
-mailmaster accounts
-
-# 结构化 JSON 输出
-mailmaster --format json accounts
-mailmaster --format json smtp-send --from sender@example.com --to user@example.com --subject "Test" --body "Hello"
+uv add mailmaster
+# 或
+pip install mailmaster
 ```
 
-JSON 输出统一使用如下包装结构：
+从本地源码安装或参与开发：
+
+```powershell
+git clone https://github.com/AndersonBY/mailmaster-cli.git
+cd mailmaster-cli
+
+# 安装本地版本为全局 CLI
+uv tool install .
+
+# 或创建本地开发环境
+uv sync
+```
+
+## 给 AI Agent 使用
+
+`mailmaster` 内置了完整的 Agent Skill，并在所有命令上提供稳定的 JSON 输出，方便 Claude Code、Codex、Gemini、Cursor 等 AI Agent 直接接管邮件工作流。
+
+### 方式一：通过 CLI 一键加载或安装 Skill
+
+```powershell
+# 直接输出完整 Skill 使用指南（供 Agent 当场读取上下文）
+mailmaster activate-skill
+
+# 一键安装到当前项目或常用 Agent 的全局技能目录
+mailmaster activate-skill --install project   # .agents/skills/mailmaster/SKILL.md
+mailmaster activate-skill --install claude    # ~/.claude/skills/mailmaster/SKILL.md
+mailmaster activate-skill --install codex     # ~/.codex/skills/mailmaster/SKILL.md
+mailmaster activate-skill --install gemini    # ~/.gemini/config/skills/mailmaster/SKILL.md
+mailmaster activate-skill --install cursor    # .cursor/skills/mailmaster/SKILL.md
+
+# 或安装到自定义目录 / 查看内置 SKILL.md 路径
+mailmaster activate-skill --dest C:\path\to\skills
+mailmaster activate-skill --path
+```
+
+### 方式二：从仓库 `skill/` 目录安装
+
+仓库根目录提供了标准格式的 [`skill/SKILL.md`](skill/SKILL.md)，可以直接复制整个 `skill/` 目录到你的 Agent 技能路径，或通过通用技能工具安装：
+
+```powershell
+npx skills add AndersonBY/mailmaster-cli
+```
+
+### 结构化 JSON 输出
+
+在任意命令的**前面或后面**加上 `--json`（或 `--format json`），即可获得统一的结构化输出：
+
+```powershell
+mailmaster accounts --json
+mailmaster list --account sender@example.com --unread --limit 10 --json
+```
+
+成功时返回：
+
+```json
+{"ok": true, "command": "list", "data": {}}
+```
+
+失败时（本地查无此项、参数错误或服务端拒绝）退出码为 `2`，不打印 Python traceback，返回带错误码和建议的 JSON：
 
 ```json
 {
-  "ok": true,
-  "command": "accounts",
-  "data": {}
+  "ok": false,
+  "command": "read",
+  "error": {"code": "mail_not_found", "message": "...", "details": {}}
 }
 ```
 
-## 快速开始
+## 常用命令
 
-### 作为 Python 库使用
+### 查看状态与账号
+
+```powershell
+# 检查本地邮箱大师数据路径与账号数量
+mailmaster doctor
+
+# 列出所有已配置的账号（后续命令均可用邮箱地址、账号名或数字 ID 指定账号）
+mailmaster accounts
+
+# 查看每个账号支持的能力与推荐通道（适合脚本与 Agent 分支判断）
+mailmaster capabilities --json
+mailmaster capabilities --sendable --mutable --json
+mailmaster capabilities --query 163 --json
+```
+
+### 本地查信与搜信
+
+读取与搜索直接访问本地数据库快照，离线可用、响应极快：
+
+```powershell
+# 查看文件夹列表
+mailmaster mailboxes --account sender@example.com
+
+# 列出邮件（支持按文件夹、未读状态和条数过滤）
+mailmaster list --account sender@example.com --mailbox 收件箱 --limit 10
+mailmaster list --account sender@example.com --unread --limit 20
+
+# 阅读邮件正文（可传 LocalId 或 RemoteId；加 --html 输出 HTML）
+mailmaster read --account sender@example.com --mail-id 40073
+
+# 按主题/发件人搜索，加 --body 同时搜索正文
+mailmaster search --account sender@example.com github --body --limit 5
+```
+
+### 发信（纯文本、HTML、Markdown 与附件）
+
+`send-mail` 会根据账号能力自动选择 SMTP 或 163/Wmsvr 私有通道发送，也支持用 `--transport smtp|wmsvr-private` 手动指定：
+
+```powershell
+# 发送纯文本邮件
+mailmaster send-mail --account sender@example.com `
+  --to user@example.com --subject "周报" --body "本周进展如下..."
+
+# 发送 HTML 邮件
+mailmaster send-mail --account sender@example.com `
+  --to user@example.com --subject "通知" --html-body "<p>你好</p>"
+
+# 发送 Markdown + LaTeX 公式（支持 --markdown-body 或 --markdown-file）
+mailmaster send-mail --account sender@example.com `
+  --to user@example.com --subject "实验记录" `
+  --markdown-body "# 摘要`n`n结果：`$E = mc^2$`" --latex-mode auto
+
+# 携带一个或多个附件（SMTP 与 163 私有通道均支持）
+mailmaster send-mail --account sender@example.com `
+  --to user@example.com --subject "附件请查收" --body "详见附件。" `
+  --attach C:\path\report.pdf --attach C:\path\data.xlsx
+```
+
+如果需要显式通过 SMTP 并自定义 `--from` 发件地址，可使用 `mailmaster smtp-send`。
+
+### 草稿管理
+
+支持在 163/Wmsvr 账号上直接创建、更新和发送服务端草稿（支持 Markdown 与附件）：
+
+```powershell
+# 新建服务端草稿（返回 draft_id 与 compose_id）
+mailmaster save-draft --account user@163.com `
+  --to colleague@example.com --subject "方案草稿" `
+  --body "初稿内容" --attach C:\path\spec.pdf
+
+# 更新同一份草稿（传入上次返回的 compose_id）
+mailmaster save-draft --account user@163.com `
+  --subject "方案草稿 v2" --body "补充了第二部分" --compose-id <compose_id>
+
+# 发送已保存的草稿（按草稿 ID 或最新匹配主题，已有附件会自动随信发出）
+mailmaster send-draft --account user@163.com --draft-id <draft_id>
+mailmaster send-draft --account user@163.com --subject "方案草稿 v2"
+```
+
+### 标记、移动、删除与拉取原文
+
+所有操作均支持通过重复 `--mail-id` 批量处理，IMAP 账号走直接 IMAP，163/Wmsvr 账号走私有通道并在同一会话内校验服务端结果：
+
+```powershell
+# 标记已读 / 未读
+mailmaster mark-read --account sender@example.com --mail-id 40073
+mailmaster mark-unread --account sender@example.com --mail-id 40073 --mail-id 40074
+
+# 移动到指定文件夹（支持文件夹名或文件夹 ID）
+mailmaster move-mail --account sender@example.com --mail-id 40073 --target-mailbox Archive
+
+# 删除邮件
+mailmaster delete-mail --account sender@example.com --mail-id 40073
+
+# 拉取完整 RFC822 原文并导出为 .eml（支持直接传本地数字 ID 或远端 ID）
+mailmaster fetch-mail --account user@163.com --mail-id 40073 --out message.eml
+```
+
+## Python 库
 
 ```python
 from mailmaster import MailMaster
 
 mm = MailMaster()
 
+# 列出账号；支持邮箱地址、账号名或整数 account.id
 for account in mm.get_accounts():
-    print(account.email)
+    print(account.id, account.email)
 
 acc = mm.open_account("sender@example.com")
 
+# 本地读取与搜索
 for mail in acc.list_mail(limit=5):
-    print(mail.subject)
+    print(mail.local_id, mail.subject)
 
 details = acc.get_details("40073")
 print(details.content.text_body)
 
-acc.send_markdown_email(
-    to=["user@example.com"],
+# 统一发信（自动选择 SMTP 或 163 私有通道，支持 Markdown、LaTeX 与附件）
+result = acc.send_mail(
+    to=["colleague@example.com"],
     subject="Hello",
-    markdown_text="# Title\n\nHello from the library API.",
+    markdown_text="# 标题\n\n通过 `mailmaster` 发送。",
+    attachments=[r"C:\path\report.pdf"],
 )
+print(result["transport"], result["status"])
+
+# 标记已读与移动
+acc.mark_read("40073")
+acc.move_mail("40073", target_mailbox="Archive")
 ```
 
-### 查看本地邮件数据
+更多接口（草稿、批量操作、原文拉取、异常处理与底层协议会话）见 [`docs/library-api.md`](docs/library-api.md)。
+
+## 使用须知
+
+- 需要在 Windows 上安装并登录过网易邮箱大师（工具直接复用其本地数据库与已保存账号配置，无需开启客户端进程）。
+- 账号口令仅在运行时内存中解密使用，不会另存到磁盘。
+- 163/Wmsvr 账号执行 `delete-mail` 为服务端彻底删除（不进“已删除”文件夹），操作前请确认目标邮件。
+
+## 文档
+
+- [Agent Skill 指南](skill/SKILL.md)
+- [Python SDK 与 CLI 参考](docs/library-api.md)
+- [架构说明](docs/architecture.md)
+- [更新记录](CHANGELOG.md)
+- [贡献指南](CONTRIBUTING.md)
+- [安全策略](SECURITY.md)
+- [协议研究笔记](docs/reverse-engineering.md)
+
+## 开发
 
 ```powershell
-mailmaster doctor
-mailmaster accounts
-mailmaster mailboxes --account sender@example.com
-mailmaster list --account sender@example.com --mailbox 收件箱 --limit 10
-mailmaster read --account sender@example.com --mail-id 40073
-mailmaster search --account sender@example.com github --body --limit 5
+python -m pytest -q
+python -m ruff check .
+python -m ty check
 ```
 
-### 通过 IMAP 修改邮件状态
+## 许可
 
-```powershell
-# 标记已读
-mailmaster mark-read --account sender@example.com --mail-id 40073
-
-# 标记未读
-mailmaster mark-unread --account sender@example.com --mail-id 40073
-
-# 移动到其他文件夹
-mailmaster move-mail --account sender@example.com --mail-id 40073 --target-mailbox Archive
-
-# 删除邮件
-mailmaster delete-mail --account sender@example.com --mail-id 40073
-```
-
-### 发送邮件
-
-`smtp-send` 会在发送时动态解析并解密当前账号的 SMTP 配置，不会把解密后的敏感凭据额外保存到本地配置文件。
-
-#### 纯文本
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "Test" \
-    --body "Hello from mailmaster"
-```
-
-#### HTML
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "HTML 邮件" \
-    --html-body "<h1>Hello</h1><p>This is an HTML email.</p>"
-```
-
-#### Markdown
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "Markdown 邮件" \
-    --markdown-body "# Title\n\n- item 1\n- item 2\n\n**bold**"
-```
-
-#### 从 Markdown 文件读取
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "Markdown file" \
-    --markdown-file .\mail.md
-```
-
-#### 从标准输入读取 Markdown
-
-```powershell
-Get-Content .\mail.md | mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "Markdown stdin" \
-    --markdown-file -
-```
-
-#### Markdown 中的本地图片
-
-如果 Markdown 文件里引用了本地图片，发送时会自动以内联图片方式嵌入邮件正文。
-
-示例 Markdown：
-
-```markdown
-![Screenshot](C:/path/to/image.png)
-```
-
-#### 普通附件
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "With attachment" \
-    --body "See attachment." \
-    --attach C:\path\to\attachment.png
-```
-
-可重复传入 `--attach` 以添加多个附件。
-
-### LaTeX 渲染模式
-
-Markdown 正文中的 LaTeX 支持以下模式：
-
-- `auto`（默认）：如果安装了可选图片依赖，则优先使用图片模式；否则回退到 `raw`
-- `mathml`：轻量依赖路径，但不同邮件客户端效果可能不稳定
-- `image`：显示效果最好，需要安装 `mailmaster[latex-image]`
-- `raw`：直接按原始公式文本展示
-
-#### 默认 auto 模式
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "LaTeX auto" \
-    --markdown-body "Inline formula $E=mc^2$"
-```
-
-#### 强制使用 MathML 模式
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "LaTeX MathML" \
-    --markdown-body "Formula $E=mc^2$" \
-    --latex-mode mathml
-```
-
-#### 强制使用图片模式
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "LaTeX image" \
-    --markdown-body "Formula $\\alpha + \\beta$" \
-    --latex-mode image
-```
-
-## 发布与调用方式
-
-本项目已按 PyPI 发布场景配置，可支持：
-
-- `uv tool install mailmaster`
-- `uvx mailmaster ...`
-
-安装后会同时暴露两个命令入口：
-
-- `mailmaster`
-- `mailmaster`
-
-## 逆向分析文档
-
-当前逆向分析整理位于：
-
-- `docs/reverse-engineering.md`
-
-面向 Python 库使用的接口说明位于：
-
-- `docs/library-api.md`
+MIT，见 [`LICENSE`](LICENSE)。

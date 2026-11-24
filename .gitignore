@@ -1,8 +1,31 @@
 .venv/
 __pycache__/
+*.pyc
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.ty_cache/
 .vscode/
+.idea/
+.zcode/
+.agents/
 dist/
+build/
+*.egg-info/
 uv.lock
-*.pyc
+.coverage
+htmlcov/
+
+# Local logs / crash dumps
+*.log
+*.stackdump
+
+# Local reverse-engineering scratch artifacts
+/.tmp-chrome-profile/
+/reverse-engineering/artifacts/
+/__tmp_*
+/frida_attach.py
+/frida_attach_multi.py
+/*.js
+/*.pid
+/_*.txt

@@ -1,10 +1,14 @@
 [project]
 name = "mailmaster"
 version = "0.1.0"
-description = "Read NetEase MailMaster local data and send email — usable as both a Python library and CLI tool."
+description = "Read, search, send, draft, and manage NetEase MailMaster emails on Windows — usable as a Python library, CLI tool, and AI Agent skill."
 readme = "README_EN.md"
+license = { file = "LICENSE" }
+authors = [
+  { name = "AndersonBY", email = "andersonby@163.com" },
+]
 requires-python = ">=3.11"
-keywords = ["mail", "email", "smtp", "cli", "mailmaster"]
+keywords = ["mail", "email", "smtp", "cli", "mailmaster", "agent", "skill"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",
@@ -23,6 +27,8 @@ dependencies = [
   "beautifulsoup4>=4.12.3",
   "cryptography>=44.0.0",
   "dnspython>=2.6.0",
+  "h2>=4.3.0",
+  "httpx>=0.28.1",
   "latex2mathml>=3.78.1",
   "markdown2>=2.5.4",
   "rich>=13.9.4",
@@ -37,6 +43,12 @@ latex-image = [
 [project.scripts]
 mailmaster = "mailmaster.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/AndersonBY/mailmaster-cli"
+Repository = "https://github.com/AndersonBY/mailmaster-cli"
+Issues = "https://github.com/AndersonBY/mailmaster-cli/issues"
+Changelog = "https://github.com/AndersonBY/mailmaster-cli/blob/main/CHANGELOG.md"
+
 [build-system]
 requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
@@ -44,11 +56,23 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/mailmaster"]
 
+[tool.hatch.build.targets.sdist]
+# Keep maintainer-only notes and CI configuration out of the published source
+# distribution.
+exclude = [
+  "/.github",
+  "/AGENTS.md",
+  "/docs/reverse-engineering.md",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.ruff]
 extend-exclude = ["ref"]
+
+[tool.ty.src]
+exclude = ["ref"]
 
 [dependency-groups]
 dev = [
@@ -56,4 +80,3 @@ dev = [
     "ruff>=0.15.5",
     "ty>=0.0.21",
 ]
-

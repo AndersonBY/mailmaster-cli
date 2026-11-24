@@ -44,6 +44,14 @@ class SmtpProfile:
         return self.username or self.email
 
 
+@dataclass(frozen=True)
+class ResolvedSmtpProfile:
+    profile: SmtpProfile
+    config_source: str
+    settings_source: str
+    credential_source: str
+
+
 def profile_from_server_config(email: str, config: dict[str, Any]) -> SmtpProfile:
     password = str(config.get("password") or "")
     if not password:
@@ -59,6 +67,49 @@ def profile_from_server_config(email: str, config: dict[str, Any]) -> SmtpProfil
         password_b64=base64.b64encode(password.encode("utf-8")).decode("ascii"),
         use_ssl=ssl_type == 1,
         use_starttls=ssl_type != 1 and port == 587,
+    )
+
+
+def resolve_smtp_profile(email: str, configs: dict[str, dict[str, Any]]) -> ResolvedSmtpProfile:
+    smtp_cfg = configs.get("SMTPServerConfig") or {}
+    wmsvr_cfg = configs.get("WmsvrServerConfig") or {}
+
+    if smtp_cfg:
+        try:
+            return ResolvedSmtpProfile(
+                profile=profile_from_server_config(email, smtp_cfg),
+                config_source="SMTPServerConfig",
+                settings_source="SMTPServerConfig",
+                credential_source="SMTPServerConfig",
+            )
+        except ValueError:
+            pass
+
+    guessed = guess_smtp_settings(email)
+    if guessed is None:
+        raise ValueError(f"No SMTP settings available for '{email}'.")
+
+    password = str(smtp_cfg.get("password") or wmsvr_cfg.get("password") or "")
+    if not password:
+        raise ValueError(f"No decryptable SMTP password for '{email}'.")
+
+    username = str(smtp_cfg.get("user") or wmsvr_cfg.get("user") or email)
+    host, port, use_ssl, use_starttls = guessed
+    profile = SmtpProfile(
+        email=email,
+        smtp_host=host,
+        smtp_port=port,
+        username=username,
+        use_ssl=use_ssl,
+        use_starttls=use_starttls,
+    )
+    profile.password = password
+
+    return ResolvedSmtpProfile(
+        profile=profile,
+        config_source="WmsvrServerConfig" if wmsvr_cfg else "SMTPServerConfig",
+        settings_source="guess_smtp_settings",
+        credential_source="WmsvrServerConfig" if str(wmsvr_cfg.get("password") or "") else "SMTPServerConfig",
     )
 
 

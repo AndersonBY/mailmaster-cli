@@ -3,7 +3,13 @@ import json
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from mailmaster.protocol_config import build_runtime_password_from_sid, decrypt_account_config_blob, decrypt_config_password
+from mailmaster.protocol_config import (
+    build_runtime_password_from_sid,
+    decrypt_account_config_blob,
+    decrypt_config_password,
+    decrypt_fixed_protected_blob,
+    decrypt_runtime_protected_blob,
+)
 
 
 def _pkcs7_pad(data: bytes) -> bytes:
@@ -55,3 +61,29 @@ def test_decrypt_account_config_blob_and_inner_password(monkeypatch) -> None:
 
     password = decrypt_config_password(config["pass"])
     assert password == "example-password-123"
+
+
+def test_decrypt_fixed_and_runtime_protected_blobs(monkeypatch) -> None:
+    iv = b"0123456789ABCDEF"
+    salt = "unit-test-salt"
+    fixed_password = "unit-test-fixed-password"
+    runtime_password = "unit-test-runtime-password"
+
+    monkeypatch.setattr(
+        "mailmaster.protocol_config.get_security_constants",
+        lambda install_root=None: (iv, salt, fixed_password),
+    )
+    monkeypatch.setattr("mailmaster.protocol_config.get_runtime_password", lambda install_root=None: runtime_password)
+
+    from hashlib import pbkdf2_hmac
+
+    fixed_key = pbkdf2_hmac("sha1", fixed_password.encode("utf-8"), salt.encode("utf-8"), 256, dklen=32)
+    runtime_key = pbkdf2_hmac("sha1", runtime_password.encode("utf-8"), salt.encode("utf-8"), 256, dklen=32)
+
+    fixed_plain = b'{"kind":"fixed"}'
+    runtime_plain = b'{"kind":"runtime"}'
+    fixed_cipher = _encrypt_aes_cbc(fixed_plain, fixed_key, iv)
+    runtime_cipher = _encrypt_aes_cbc(runtime_plain, runtime_key, iv)
+
+    assert decrypt_fixed_protected_blob(fixed_cipher) == fixed_plain
+    assert decrypt_runtime_protected_blob(runtime_cipher) == runtime_plain

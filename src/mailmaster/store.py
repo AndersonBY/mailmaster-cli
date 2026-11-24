@@ -1,32 +1,76 @@
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 import json
 import shutil
 import sqlite3
 import tempfile
+import threading
 from hashlib import sha1
 from pathlib import Path
-from typing import Any, Mapping, cast
+from typing import Any, cast
 
 from .codec import decode_mail_body, html_to_text
 from .models import Account, MailAttachment, MailContent, MailDetails, MailRecord, Mailbox
 from .protocol_config import load_server_configs
 
+_SNAPSHOT_LOCK = threading.Lock()
+_SNAPSHOT_CACHE: dict[Path, tuple[Path, tuple[tuple[int, int], tuple[int, int] | None]]] = {}
 
-def _copy_to_temp(path: Path) -> Path:
+
+def _file_signature(path: Path) -> tuple[int, int] | None:
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return None
+    return (stat.st_mtime_ns, stat.st_size)
+
+
+def copy_sqlite_snapshot(path: Path) -> Path:
+    resolved = path.resolve()
+    src_stat = resolved.stat()
+    src_sig = (src_stat.st_mtime_ns, src_stat.st_size)
+    wal_sig = _file_signature(Path(f"{resolved}-wal"))
+    signature = (src_sig, wal_sig)
+
     temp_dir = Path(tempfile.gettempdir()) / "mailmaster"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-    digest = sha1(str(path).encode("utf-8")).hexdigest()[:10]
-    target = temp_dir / f"{digest}_{path.name}"
-    shutil.copy2(path, target)
-    return target
+    digest = sha1(str(resolved).encode("utf-8")).hexdigest()[:10]
+    target = temp_dir / f"{digest}_{resolved.name}"
+
+    with _SNAPSHOT_LOCK:
+        cached = _SNAPSHOT_CACHE.get(resolved)
+        if cached is not None:
+            cached_target, cached_sig = cached
+            if cached_target == target and cached_sig == signature and cached_target.exists():
+                return cached_target
+
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(resolved, target)
+        for suffix in ("-wal", "-shm"):
+            sidecar_src = Path(f"{resolved}{suffix}")
+            sidecar_dst = Path(f"{target}{suffix}")
+            if sidecar_src.exists():
+                shutil.copy2(sidecar_src, sidecar_dst)
+            else:
+                sidecar_dst.unlink(missing_ok=True)
+
+        _SNAPSHOT_CACHE[resolved] = (target, signature)
+        return target
 
 
-def _connect_sqlite(path: Path, *, as_bytes: bool = False) -> sqlite3.Connection:
-    db = sqlite3.connect(_copy_to_temp(path))
+_copy_to_temp = copy_sqlite_snapshot
+
+
+@contextmanager
+def _connect_sqlite(path: Path, *, as_bytes: bool = False) -> Iterator[sqlite3.Connection]:
+    db = sqlite3.connect(copy_sqlite_snapshot(path))
     if as_bytes:
         db.text_factory = bytes
-    return db
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def _parse_jsonish(value: str | bytes | None) -> object:
@@ -100,6 +144,14 @@ def _sqlite_int(value: object) -> int:
     return int(str(value) or 0)
 
 
+class LocalLookupError(ValueError):
+    """A local identifier did not resolve; carries a stable code for the CLI layer."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 class MailMasterStore:
     def __init__(self, app_db_path: Path):
         self.app_db_path = app_db_path
@@ -121,11 +173,12 @@ class MailMasterStore:
             for row in rows
         ]
 
-    def get_account(self, identifier: str) -> Account:
+    def get_account(self, identifier: str | int) -> Account:
+        ident = str(identifier)
         for account in self.get_accounts():
-            if identifier in {str(account.id), account.email, account.name}:
+            if ident in {str(account.id), account.email, account.name}:
                 return account
-        raise ValueError(f"Account not found: {identifier}")
+        raise LocalLookupError("account_not_found", f"Account not found: {identifier}")
 
 
 class AccountStore:
@@ -162,7 +215,7 @@ class AccountStore:
         for box in self.get_mailboxes():
             if mailbox in {box.id, box.display_name}:
                 return box.id
-        raise ValueError(f"Mailbox not found: {mailbox}")
+        raise LocalLookupError("mailbox_not_found", f"Mailbox not found: {mailbox}")
 
     def list_mail(self, *, mailbox: str | None = None, unread_only: bool = False, limit: int = 20) -> list[MailRecord]:
         mailbox_id = self.resolve_mailbox(mailbox)
@@ -226,10 +279,11 @@ class AccountStore:
         if not include_body:
             return candidates[:limit]
 
+        contents = self.get_contents_bulk([record.local_id for record in candidates])
         query_lower = query.lower()
         matched: list[MailRecord] = []
         for record in candidates:
-            body = self.get_content(record.local_id)
+            body = contents.get(record.local_id) or MailContent(mail_id=record.local_id)
             body_text = (body.text_body or "") + "\n" + (body.html_body or "")
             if query_lower in body_text.lower() or query_lower in record.subject.lower() or query_lower in record.summary.lower():
                 matched.append(record)
@@ -251,7 +305,7 @@ class AccountStore:
                 (mail_id, mail_id),
             ).fetchone()
         if row is None:
-            raise ValueError(f"Mail not found: {mail_id}")
+            raise LocalLookupError("mail_not_found", f"Mail not found: {mail_id}")
         return self._row_to_mail_record(row)
 
     def get_attachments(self, mail_id: int) -> list[MailAttachment]:
@@ -272,20 +326,15 @@ class AccountStore:
             for row in rows
         ]
 
-    def get_content(self, mail_id: int) -> MailContent:
-        with _connect_sqlite(self.content_db, as_bytes=True) as conn:
-            rows = conn.execute(
-                "SELECT MailId, ContentType, OrigBody, CompressType FROM MailContent WHERE MailId = ? ORDER BY ContentType DESC",
-                (mail_id,),
-            ).fetchall()
-
+    @staticmethod
+    def _build_mail_content(mail_id: int, rows: list[tuple[Any, ...]]) -> MailContent:
         text_body: str | None = None
         html_body: str | None = None
         html_as_text: str | None = None
         for row in rows:
             _, content_type, body, compress_type = row
-            decoded = decode_mail_body(body, int(compress_type))
-            if int(content_type) == 1:
+            decoded = decode_mail_body(body, _sqlite_int(compress_type))
+            if _sqlite_int(content_type) == 1:
                 html_body = decoded
                 html_as_text = html_to_text(decoded)
             else:
@@ -297,6 +346,37 @@ class AccountStore:
         ):
             text_body = html_as_text
         return MailContent(mail_id=mail_id, text_body=text_body, html_body=html_body)
+
+    def get_content(self, mail_id: int) -> MailContent:
+        with _connect_sqlite(self.content_db, as_bytes=True) as conn:
+            rows = conn.execute(
+                "SELECT MailId, ContentType, OrigBody, CompressType FROM MailContent WHERE MailId = ? ORDER BY ContentType DESC",
+                (mail_id,),
+            ).fetchall()
+        return self._build_mail_content(mail_id, rows)
+
+    def get_contents_bulk(self, mail_ids: list[int]) -> dict[int, MailContent]:
+        unique_ids = list(dict.fromkeys(mail_ids))
+        if not unique_ids:
+            return {}
+        if not self.content_db.exists():
+            return {mid: MailContent(mail_id=mid) for mid in unique_ids}
+
+        grouped: dict[int, list[tuple[Any, ...]]] = {mid: [] for mid in unique_ids}
+        with _connect_sqlite(self.content_db, as_bytes=True) as conn:
+            for start in range(0, len(unique_ids), 500):
+                batch = unique_ids[start : start + 500]
+                placeholders = ", ".join("?" for _ in batch)
+                rows = conn.execute(
+                    f"SELECT MailId, ContentType, OrigBody, CompressType FROM MailContent WHERE MailId IN ({placeholders}) ORDER BY MailId, ContentType DESC",
+                    batch,
+                ).fetchall()
+                for row in rows:
+                    row_mail_id = _sqlite_int(row[0])
+                    if row_mail_id in grouped:
+                        grouped[row_mail_id].append(row)
+
+        return {mid: self._build_mail_content(mid, grouped[mid]) for mid in unique_ids}
 
     def get_details(self, mail_id: str) -> MailDetails:
         record = self.get_mail(mail_id)

@@ -9,9 +9,11 @@ from mailmaster.email_renderer import (
     render_markdown_email,
 )
 from mailmaster.smtp import (
+    ResolvedSmtpProfile,
     SmtpProfile,
     guess_smtp_settings,
     profile_from_server_config,
+    resolve_smtp_profile,
     send_email,
 )
 
@@ -78,6 +80,45 @@ def test_profile_from_server_config() -> None:
     assert profile.effective_username == "smtp-user"
     assert profile.password == "secret123"
     assert profile.use_ssl is True
+
+
+def test_resolve_smtp_profile_prefers_smtp_server_config() -> None:
+    result = resolve_smtp_profile(
+        "test@example.com",
+        {
+            "SMTPServerConfig": {
+                "host": "smtp.example.com",
+                "port": 465,
+                "user": "smtp-user",
+                "password": "secret123",
+                "sslType": 1,
+            }
+        },
+    )
+    assert isinstance(result, ResolvedSmtpProfile)
+    assert result.profile.smtp_host == "smtp.example.com"
+    assert result.config_source == "SMTPServerConfig"
+    assert result.settings_source == "SMTPServerConfig"
+    assert result.credential_source == "SMTPServerConfig"
+
+
+def test_resolve_smtp_profile_falls_back_to_wmsvr_and_guess() -> None:
+    result = resolve_smtp_profile(
+        "user@163.com",
+        {
+            "WmsvrServerConfig": {
+                "user": "user@163.com",
+                "password": "secret123",
+            }
+        },
+    )
+    assert result.profile.smtp_host == "smtp.163.com"
+    assert result.profile.smtp_port == 465
+    assert result.profile.effective_username == "user@163.com"
+    assert result.profile.password == "secret123"
+    assert result.config_source == "WmsvrServerConfig"
+    assert result.settings_source == "guess_smtp_settings"
+    assert result.credential_source == "WmsvrServerConfig"
 
 
 def test_render_markdown_email() -> None:

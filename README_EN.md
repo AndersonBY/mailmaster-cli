@@ -1,259 +1,257 @@
 # mailmaster
 
-`mailmaster` is a Windows command-line tool for reading local NetEase MailMaster data and sending email via dynamically decrypted SMTP credentials.
+[中文](README.md)
 
-It is designed to work well both for humans and for automation / AI agents.
+Read, search, send, draft, and manage **NetEase MailMaster** emails directly from the Windows CLI or Python. Supports both standard IMAP/SMTP accounts and 163/126/yeah.net (Wmsvr) accounts, with Markdown/LaTeX rendering, attachments, drafts, and structured JSON output—no running MailMaster desktop app required.
 
-## Install
+## Installation
 
-### With `uv tool install`
+Install globally as a CLI tool with [`uv`](https://docs.astral.sh/uv/):
 
 ```powershell
+# Recommended: install the global CLI
 uv tool install mailmaster
-```
 
-After installation, use:
-
-```powershell
-mailmaster doctor
-```
-
-### Without installation via `uvx`
-
-```powershell
-uvx mailmaster doctor
-```
-
-If you want optional LaTeX image rendering support:
-
-```powershell
+# Optional: render LaTeX math formulas as inline images
 uv tool install "mailmaster[latex-image]"
-
-# or one-off
-uvx --with "mailmaster[latex-image]" mailmaster doctor
 ```
 
-## Core features
-
-- Read account list, mailboxes, mail list, and mail details from local MailMaster databases
-- Search local mail data
-- Send mail through dynamically decrypted SMTP configuration
-- Support plain text, HTML, Markdown, local inline images, file attachments, and LaTeX rendering modes
-- Support structured JSON output for agents and scripts
-
-## Output formats
-
-All commands support a global `--format` option:
+Install as a Python library in a project:
 
 ```powershell
-# Human-friendly output
-mailmaster accounts
-
-# Structured JSON output
-mailmaster --format json accounts
-mailmaster --format json smtp-send --from sender@example.com --to user@example.com --subject "Test" --body "Hello"
+uv add mailmaster
+# or
+pip install mailmaster
 ```
 
-JSON output uses a stable wrapper like:
+Install from a local checkout or set up a dev environment:
+
+```powershell
+git clone https://github.com/AndersonBY/mailmaster-cli.git
+cd mailmaster-cli
+
+# Install your local checkout as a global CLI
+uv tool install .
+
+# Or create a local dev environment
+uv sync
+```
+
+## For AI Agents
+
+`mailmaster` ships a ready-to-use Agent Skill and consistent JSON output on every command, so AI Agents (Claude Code, Codex, Gemini, Cursor, etc.) can work with email immediately.
+
+### Option 1: Load or install the Skill from the CLI
+
+```powershell
+# Print the full Skill playbook directly (for on-the-fly context loading)
+mailmaster activate-skill
+
+# Install SKILL.md into the current project or your Agent's global skills folder
+mailmaster activate-skill --install project   # .agents/skills/mailmaster/SKILL.md
+mailmaster activate-skill --install claude    # ~/.claude/skills/mailmaster/SKILL.md
+mailmaster activate-skill --install codex     # ~/.codex/skills/mailmaster/SKILL.md
+mailmaster activate-skill --install gemini    # ~/.gemini/config/skills/mailmaster/SKILL.md
+mailmaster activate-skill --install cursor    # .cursor/skills/mailmaster/SKILL.md
+
+# Or install to a custom directory / print the bundled SKILL.md path
+mailmaster activate-skill --dest C:\path\to\skills
+mailmaster activate-skill --path
+```
+
+### Option 2: Install from the repository `skill/` directory
+
+The repository root contains [`skill/SKILL.md`](skill/SKILL.md). Copy `skill/` directly into your Agent's skills directory, or install it with a skill manager:
+
+```powershell
+npx skills add AndersonBY/mailmaster-cli
+```
+
+### Structured JSON output
+
+Pass `--json` (or `--format json`) **before or after** any subcommand for deterministic JSON output:
+
+```powershell
+mailmaster accounts --json
+mailmaster list --account sender@example.com --unread --limit 10 --json
+```
+
+Success envelope:
+
+```json
+{"ok": true, "command": "list", "data": {}}
+```
+
+Errors (missing local items, invalid arguments, or server rejections) exit with code `2`, print no Python traceback, and include a stable error code and actionable suggestions:
 
 ```json
 {
-  "ok": true,
-  "command": "accounts",
-  "data": {}
+  "ok": false,
+  "command": "read",
+  "error": {"code": "mail_not_found", "message": "...", "details": {}}
 }
 ```
 
-## Quick start
+## Common commands
 
-### Use as a Python library
+### Check status & accounts
+
+```powershell
+# Inspect discovered MailMaster paths and local account count
+mailmaster doctor
+
+# List configured accounts (commands accept email, account name, or numeric ID)
+mailmaster accounts
+
+# Inspect per-account capabilities and recommended transports
+mailmaster capabilities --json
+mailmaster capabilities --sendable --mutable --json
+mailmaster capabilities --query 163 --json
+```
+
+### Read & search locally
+
+Local reads run offline against read-only SQLite snapshots:
+
+```powershell
+# List mailboxes
+mailmaster mailboxes --account sender@example.com
+
+# List messages (filter by mailbox, unread status, and limit)
+mailmaster list --account sender@example.com --mailbox 收件箱 --limit 10
+mailmaster list --account sender@example.com --unread --limit 20
+
+# Read a message (accepts LocalId or RemoteId; pass --html for raw HTML)
+mailmaster read --account sender@example.com --mail-id 40073
+
+# Search headers, or add --body to search message bodies as well
+mailmaster search --account sender@example.com github --body --limit 5
+```
+
+### Send mail (text, HTML, Markdown/LaTeX & attachments)
+
+`send-mail` automatically selects SMTP or the 163/Wmsvr private transport based on account capabilities (override with `--transport smtp|wmsvr-private`):
+
+```powershell
+# Plain text
+mailmaster send-mail --account sender@example.com `
+  --to user@example.com --subject "Weekly update" --body "Progress summary..."
+
+# HTML
+mailmaster send-mail --account sender@example.com `
+  --to user@example.com --subject "Notice" --html-body "<p>Hello</p>"
+
+# Markdown + LaTeX (supports --markdown-body or --markdown-file)
+mailmaster send-mail --account sender@example.com `
+  --to user@example.com --subject "Notes" `
+  --markdown-body "# Summary`n`nValue: `$E = mc^2$`" --latex-mode auto
+
+# Attachments (supported on both SMTP and 163/Wmsvr)
+mailmaster send-mail --account sender@example.com `
+  --to user@example.com --subject "Report" --body "See attached." `
+  --attach C:\path\report.pdf --attach C:\path\data.xlsx
+```
+
+Use `mailmaster smtp-send` when you explicitly want SMTP with a custom `--from` address.
+
+### Drafts
+
+Create, update, and send server-side drafts on 163/Wmsvr accounts (with Markdown and attachment support):
+
+```powershell
+# Create a draft (returns draft_id and compose_id)
+mailmaster save-draft --account user@163.com `
+  --to colleague@example.com --subject "Proposal" `
+  --body "First draft" --attach C:\path\spec.pdf
+
+# Update that draft using the returned compose_id
+mailmaster save-draft --account user@163.com `
+  --subject "Proposal v2" --body "Added section 2" --compose-id <compose_id>
+
+# Send a stored draft by ID or newest matching subject (existing attachments carry over automatically)
+mailmaster send-draft --account user@163.com --draft-id <draft_id>
+mailmaster send-draft --account user@163.com --subject "Proposal v2"
+```
+
+### Mark, move, delete & fetch raw source
+
+Mutations support repeating `--mail-id` for batch operations. IMAP accounts run over direct IMAP; 163/Wmsvr accounts use the private protocol and verify remote state in the same session:
+
+```powershell
+# Mark read / unread
+mailmaster mark-read --account sender@example.com --mail-id 40073
+mailmaster mark-unread --account sender@example.com --mail-id 40073 --mail-id 40074
+
+# Move to another mailbox (by folder name or folder ID)
+mailmaster move-mail --account sender@example.com --mail-id 40073 --target-mailbox Archive
+
+# Delete messages
+mailmaster delete-mail --account sender@example.com --mail-id 40073
+
+# Fetch full RFC822 source to a .eml file (accepts either local numeric ID or RemoteId)
+mailmaster fetch-mail --account user@163.com --mail-id 40073 --out message.eml
+```
+
+## Python library
 
 ```python
 from mailmaster import MailMaster
 
 mm = MailMaster()
 
+# List accounts; open by email, account name, or numeric account.id
 for account in mm.get_accounts():
-    print(account.email)
+    print(account.id, account.email)
 
 acc = mm.open_account("sender@example.com")
 
+# Local reads
 for mail in acc.list_mail(limit=5):
-    print(mail.subject)
+    print(mail.local_id, mail.subject)
 
 details = acc.get_details("40073")
 print(details.content.text_body)
 
-acc.send_markdown_email(
-    to=["user@example.com"],
+# Unified send (auto-selects SMTP or 163/Wmsvr; supports Markdown, LaTeX, and attachments)
+result = acc.send_mail(
+    to=["colleague@example.com"],
     subject="Hello",
-    markdown_text="# Title\n\nHello from the library API.",
+    markdown_text="# Hello\n\nSent with `mailmaster`.",
+    attachments=[r"C:\path\report.pdf"],
 )
+print(result["transport"], result["status"])
+
+# Mark read and move
+acc.mark_read("40073")
+acc.move_mail("40073", target_mailbox="Archive")
 ```
 
-### Inspect local mail data
+See [`docs/library-api.md`](docs/library-api.md) for the complete SDK reference (drafts, batch mutations, raw source fetching, errors, skill helpers, and low-level protocol sessions).
+
+## Notes
+
+- Requires Windows with NetEase MailMaster installed and signed in to at least one account (the tool reads its local databases and stored account configs directly—MailMaster does not need to be running).
+- Stored credentials are decrypted in memory at runtime only and are never written back to disk.
+- On 163/Wmsvr accounts, `delete-mail` performs a permanent server-side delete (it does not move messages to Trash); double-check target IDs before deleting.
+
+## Documentation
+
+- [Agent Skill playbook](skill/SKILL.md)
+- [Python SDK & CLI reference](docs/library-api.md)
+- [Architecture](docs/architecture.md)
+- [Changelog](CHANGELOG.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Reverse-engineering notes](docs/reverse-engineering.md)
+
+## Development
 
 ```powershell
-mailmaster doctor
-mailmaster accounts
-mailmaster mailboxes --account sender@example.com
-mailmaster list --account sender@example.com --mailbox 收件箱 --limit 10
-mailmaster read --account sender@example.com --mail-id 40073
-mailmaster search --account sender@example.com github --body --limit 5
+python -m pytest -q
+python -m ruff check .
+python -m ty check
 ```
 
-### Mutate mail state via IMAP
+## License
 
-```powershell
-# Mark as read
-mailmaster mark-read --account sender@example.com --mail-id 40073
-
-# Mark as unread
-mailmaster mark-unread --account sender@example.com --mail-id 40073
-
-# Move to another mailbox
-mailmaster move-mail --account sender@example.com --mail-id 40073 --target-mailbox Archive
-
-# Delete mail
-mailmaster delete-mail --account sender@example.com --mail-id 40073
-```
-
-### Send email
-
-`smtp-send` dynamically resolves and decrypts the current account's SMTP settings at send time. Decrypted credentials are not stored in an extra local config file.
-
-#### Plain text
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "Test" \
-    --body "Hello from mailmaster"
-```
-
-#### HTML
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "HTML email" \
-    --html-body "<h1>Hello</h1><p>This is an HTML email.</p>"
-```
-
-#### Markdown
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "Markdown email" \
-    --markdown-body "# Title\n\n- item 1\n- item 2\n\n**bold**"
-```
-
-#### Markdown from file
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "Markdown file" \
-    --markdown-file .\mail.md
-```
-
-#### Markdown from stdin
-
-```powershell
-Get-Content .\mail.md | mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "Markdown stdin" \
-    --markdown-file -
-```
-
-#### Inline local images in Markdown
-
-If a Markdown file contains a local image, it will be embedded inline in the email body.
-
-Example Markdown:
-
-```markdown
-![Screenshot](C:/path/to/image.png)
-```
-
-#### File attachments
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "With attachment" \
-    --body "See attachment." \
-    --attach C:\path\to\attachment.png
-```
-
-Repeat `--attach` to add multiple attachments.
-
-### LaTeX rendering modes
-
-LaTeX is supported in Markdown bodies through three modes:
-
-- `auto` (default): use image rendering if optional image support is installed, otherwise fall back to `raw`
-- `mathml`: lightweight dependency path, but client rendering quality may vary
-- `image`: best visual result, requires `mailmaster[latex-image]`
-- `raw`: render formulas as raw code-like text
-
-#### Default auto mode
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "LaTeX auto" \
-    --markdown-body "Inline formula $E=mc^2$"
-```
-
-#### Force MathML mode
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "LaTeX MathML" \
-    --markdown-body "Formula $E=mc^2$" \
-    --latex-mode mathml
-```
-
-#### Force image mode
-
-```powershell
-mailmaster smtp-send \
-    --from sender@example.com \
-    --to user@example.com \
-    --subject "LaTeX image" \
-    --markdown-body "Formula $\\alpha + \\beta$" \
-    --latex-mode image
-```
-
-## Publishing intent
-
-This project is configured so it can be published to PyPI and used via:
-
-- `uv tool install mailmaster`
-- `uvx mailmaster ...`
-
-The package exposes both console entry points:
-
-- `mailmaster`
-- `mailmaster`
-
-## Reverse engineering notes
-
-Current reverse-engineering notes are maintained in:
-
-- `docs/reverse-engineering.md`
-
-Library-oriented usage notes are maintained in:
-
-- `docs/library-api.md`
+MIT. See [`LICENSE`](LICENSE).

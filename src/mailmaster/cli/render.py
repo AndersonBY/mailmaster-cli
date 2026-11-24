@@ -5,7 +5,7 @@ from datetime import datetime
 from rich.console import Console
 from rich.table import Table
 
-from ..models import Account, MailDetails, MailRecord, Mailbox
+from ..models import Account, AccountCapabilities, MailDetails, MailRecord, Mailbox
 
 console = Console()
 
@@ -25,6 +25,41 @@ def print_accounts(accounts: list[Account]) -> None:
     table.add_column("Data Path")
     for account in accounts:
         table.add_row(str(account.id), account.email, str(account.type), "yes" if account.valid else "no", str(account.data_path))
+    console.print(table)
+
+
+def print_capabilities(items: list[AccountCapabilities]) -> None:
+    table = Table(title="Account Capabilities")
+    table.add_column("ID")
+    table.add_column("Email")
+    table.add_column("Read")
+    table.add_column("Send")
+    table.add_column("Mutate")
+    table.add_column("Configs")
+    table.add_column("Paths")
+    table.add_column("Warnings")
+    for item in items:
+        configs = ", ".join(
+            name
+            for name, enabled in (
+                ("IMAP", item.has_imap_config),
+                ("SMTP", item.has_smtp_config),
+                ("WMSVR", item.has_wmsvr_config),
+            )
+            if enabled
+        ) or "-"
+        paths = ", ".join(item.product_paths) or "-"
+        warnings = "; ".join(item.warnings) or "-"
+        table.add_row(
+            str(item.account_id),
+            item.email,
+            item.recommended_read_method,
+            item.recommended_send_method,
+            item.recommended_mutation_method,
+            configs,
+            paths,
+            warnings,
+        )
     console.print(table)
 
 
@@ -75,3 +110,18 @@ def print_mail_details(details: MailDetails, show_html: bool = False) -> None:
             console.print(f"- {attachment.name or '(inline)'} [{attachment.size} bytes] {attachment.content_type}")
     console.print("[bold]Body:[/bold]")
     console.print(details.content.html_body if show_html else (details.content.text_body or ""))
+
+
+def print_key_values(title: str, rows: list[tuple[str, str]]) -> None:
+    table = Table(title=title, show_header=False)
+    table.add_column("Field", style="bold")
+    table.add_column("Value")
+    for name, value in rows:
+        table.add_row(name, value)
+    console.print(table)
+
+
+def print_string_list(title: str, items: list[str]) -> None:
+    console.print(f"[bold]{title}[/bold] ({len(items)})")
+    for item in items:
+        console.print(f"- {item}")

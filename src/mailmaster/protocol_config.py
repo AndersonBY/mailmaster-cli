@@ -157,9 +157,17 @@ def get_runtime_password(install_root: Path | None = None) -> str:
     return build_runtime_password_from_sid(_get_current_user_sid(), install_root)
 
 
-def decrypt_account_config_blob(blob: bytes, install_root: Path | None = None) -> dict[str, Any]:
+def decrypt_fixed_protected_blob(blob: bytes, install_root: Path | None = None) -> bytes:
     _, _, fixed_password = get_security_constants(install_root)
-    return json.loads(_decrypt_aes_cbc(blob, fixed_password, install_root).decode("utf-8"))
+    return _decrypt_aes_cbc(blob, fixed_password, install_root)
+
+
+def decrypt_runtime_protected_blob(blob: bytes, install_root: Path | None = None) -> bytes:
+    return _decrypt_aes_cbc(blob, get_runtime_password(install_root), install_root)
+
+
+def decrypt_account_config_blob(blob: bytes, install_root: Path | None = None) -> dict[str, Any]:
+    return json.loads(decrypt_fixed_protected_blob(blob, install_root).decode("utf-8"))
 
 
 def decrypt_config_password(password_b64: str, install_root: Path | None = None) -> str:
@@ -167,13 +175,15 @@ def decrypt_config_password(password_b64: str, install_root: Path | None = None)
         return ""
     raw = base64.b64decode(password_b64)
     try:
-        return _decrypt_aes_cbc(raw, get_runtime_password(install_root), install_root).decode("utf-8")
+        return decrypt_runtime_protected_blob(raw, install_root).decode("utf-8")
     except Exception:
         return ""
 
 
 def load_server_configs(mail_db: Path, *, install_root: Path | None = None) -> dict[str, dict[str, Any]]:
-    conn = sqlite3.connect(mail_db)
+    from .store import copy_sqlite_snapshot
+
+    conn = sqlite3.connect(copy_sqlite_snapshot(mail_db))
     try:
         rows = conn.execute(
             "SELECT Key, Value FROM AccountConfig WHERE Key IN ('IMAPServerConfig', 'SMTPServerConfig', 'WmsvrServerConfig')"
