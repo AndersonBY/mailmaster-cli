@@ -27,18 +27,19 @@ def doctor() -> None:
 
     paths, store = _commands._paths_and_store()
     accounts_list = store.get_accounts()
+    def _render() -> None:
+        console.print(f"install_root: {paths.install_root}")
+        console.print(f"launcher_exe: {paths.launcher_exe}")
+        console.print(f"local_root: {paths.local_root}")
+        console.print(f"app_db: {paths.app_db}")
+        console.print(f"accounts_root: {paths.accounts_root}")
+        console.print()
+        print_accounts(accounts_list)
+
     _emit(
         "doctor",
         {"paths": paths, "accounts": accounts_list, "account_count": len(accounts_list)},
-        lambda: (
-            console.print(f"install_root: {paths.install_root}"),
-            console.print(f"launcher_exe: {paths.launcher_exe}"),
-            console.print(f"local_root: {paths.local_root}"),
-            console.print(f"app_db: {paths.app_db}"),
-            console.print(f"accounts_root: {paths.accounts_root}"),
-            console.print(),
-            print_accounts(accounts_list),
-        ),
+        _render,
     )
 
 

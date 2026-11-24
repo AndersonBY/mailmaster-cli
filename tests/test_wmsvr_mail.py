@@ -343,7 +343,7 @@ def test_delete_messages_verified_accepts_a_removed_message() -> None:
         {},
     ]
     codes = ["S_OK", "S_PARTIAL_OK"]
-    session._records_by_mid = lambda ids: (reads.pop(0), {"code": codes.pop(0)})  # type: ignore[method-assign]
+    session._records_by_mid = lambda ids, *, fields=(): (reads.pop(0), {"code": codes.pop(0)})  # type: ignore[method-assign]
     session.delete_messages = lambda ids, *, delete_type="batch": {"code": "S_OK"}  # type: ignore[method-assign]
 
     result = session.delete_messages_verified(["755:x"])
@@ -362,7 +362,7 @@ def test_delete_messages_verified_rejects_a_silent_delete() -> None:
         {"755:x": {"mid": "755:x", "fid": 7}},
         {"755:x": {"mid": "755:x", "fid": 7}},
     ]
-    session._records_by_mid = lambda ids: (reads.pop(0), {"code": "S_OK"})  # type: ignore[method-assign]
+    session._records_by_mid = lambda ids, *, fields=(): (reads.pop(0), {"code": "S_OK"})  # type: ignore[method-assign]
     session.delete_messages = lambda ids, *, delete_type="batch": {"code": "S_OK"}  # type: ignore[method-assign]
 
     with pytest.raises(WmsvrMailError) as excinfo:
@@ -375,7 +375,7 @@ def test_delete_messages_verified_accepts_an_already_absent_message() -> None:
     """An id the read-back never resolves before or after the delete reached the end state."""
     session = _FakeSession([])
     reads = [{}, {}]
-    session._records_by_mid = lambda ids: (reads.pop(0), {"code": "S_PARTIAL_OK"})  # type: ignore[method-assign]
+    session._records_by_mid = lambda ids, *, fields=(): (reads.pop(0), {"code": "S_PARTIAL_OK"})  # type: ignore[method-assign]
     session.delete_messages = lambda ids, *, delete_type="batch": {"code": "S_OK"}  # type: ignore[method-assign]
 
     result = session.delete_messages_verified(["755:x"])

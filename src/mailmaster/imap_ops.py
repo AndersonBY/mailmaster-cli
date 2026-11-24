@@ -4,7 +4,7 @@ from __future__ import annotations
 import imaplib
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Iterator, Literal, Protocol, cast
+from typing import Generator, Literal, Protocol, cast
 
 from .models import MailRecord
 
@@ -82,7 +82,7 @@ def _has_move_capability(client: ImapClientProtocol) -> bool:
 
 
 @contextmanager
-def open_imap_connection(profile: ImapProfile, client_factory: type[imaplib.IMAP4] | type[imaplib.IMAP4_SSL] | None = None) -> Iterator[ImapClientProtocol]:
+def open_imap_connection(profile: ImapProfile, client_factory: type[imaplib.IMAP4] | type[imaplib.IMAP4_SSL] | None = None) -> Generator[ImapClientProtocol, None, None]:
     client: ImapClientProtocol
     if profile.use_ssl:
         factory = client_factory or imaplib.IMAP4_SSL

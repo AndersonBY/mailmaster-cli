@@ -63,6 +63,7 @@ class _DraftSession(WmsvrMailSession):
         self._replies = list(replies or [])
         self.calls: list[tuple[str, dict]] = []
         self.session_key = SESSION_KEY
+        self.session = _session_state()
 
     def request_lenient(self, method, body=None):
         self.calls.append((method, dict(body or {})))
@@ -70,10 +71,6 @@ class _DraftSession(WmsvrMailSession):
 
     def _business_context(self):
         return _context()
-
-    @property
-    def session(self):
-        return _session_state()
 
 
 def _restore_reply(

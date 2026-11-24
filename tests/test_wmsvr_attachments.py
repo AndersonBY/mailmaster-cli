@@ -181,6 +181,7 @@ class _ScriptedSession(WmsvrMailSession):
         self.calls: list[tuple[str, dict]] = []
         self.frames: list = []
         self.session_key = SESSION_KEY
+        self.session = _session_state()
 
     def request(self, method, body=None):
         self.calls.append((method, dict(body or {})))
@@ -192,10 +193,6 @@ class _ScriptedSession(WmsvrMailSession):
 
     def _business_context(self):
         return _context()
-
-    @property
-    def session(self):
-        return _session_state()
 
 
 def _chunk_reply(code: str = "S_OK", actual_size: int = 64, attachment_id: int = 1,

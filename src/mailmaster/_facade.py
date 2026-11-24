@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Generator
 
 from .discovery import discover_paths
 from .email_renderer import LatexMode, RenderedMarkdownEmail, render_markdown_email
@@ -544,7 +544,7 @@ class AccountAccess:
         return context, init.token
 
     @contextmanager
-    def _open_private_session(self, *, timeout: float = 30.0) -> Iterator[WmsvrMailSession]:
+    def _open_private_session(self, *, timeout: float = 30.0) -> Generator[WmsvrMailSession, None, None]:
         """Open one per-operation authenticated Wmsvr mail session."""
         context, token = self._private_write_material()
         with open_wmsvr_mail_session(

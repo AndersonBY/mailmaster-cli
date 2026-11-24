@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 import json
 import shutil
@@ -63,7 +63,7 @@ _copy_to_temp = copy_sqlite_snapshot
 
 
 @contextmanager
-def _connect_sqlite(path: Path, *, as_bytes: bool = False) -> Iterator[sqlite3.Connection]:
+def _connect_sqlite(path: Path, *, as_bytes: bool = False) -> Generator[sqlite3.Connection, None, None]:
     db = sqlite3.connect(copy_sqlite_snapshot(path))
     if as_bytes:
         db.text_factory = bytes
